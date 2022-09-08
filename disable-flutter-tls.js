@@ -9,18 +9,42 @@ If the script can't find ssl_verify_peer_cert, please create an issue at https:/
 
 */
 
+var config = {
+    "ios":{
+        "modulename": "Flutter",
+        "patterns":{
+            "arm64": [
+                "FF 83 01 D1 FA 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 FD 7B 05 A9 FD 43 01 91 F? 03 00 AA 1? 00 40 F9 ?8 1A 40 F9 15 ?5 4? F9 B5 00 00 B4 "
+            ],
+        },
+    },
+    "android":{
+        "modulename": "libflutter.so",
+        "patterns":{
+            "arm64": [
+                "F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9",
+                "F? 43 01 D1 FE 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 13 00 40 F9 F4 03 00 AA 68 1A 40 F9"
+            ],
+            "arm": [
+                "2D E9 FE 43 D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ?? 71"
+            ],
+            "x64": [
+                "55 41 57 41 56 41 55 41 54 53 50 49 89 f? 4c 8b 37 49 8b 46 30 4c 8b a? ?? 0? 00 00 4d 85 e? 74 1? 4d 8b",
+                "55 41 57 41 56 41 55 41 54 53 48 83 EC 18 49 89 FF 48 8B 1F 48 8B 43 30 4C 8B A0 28 02 00 00 4D 85 E4 74"
+            ]
+        }
+    }
+};
+
 var TLSValidationDisabled = false;
-var secondRun = false;
 if (Java.available) {
     console.log("[+] Java environment detected");
     Java.perform(hookSystemLoadLibrary);
-    disableTLSValidationAndroid();
-    setTimeout(disableTLSValidationAndroid, 1000);
 } else if (ObjC.available) {
     console.log("[+] iOS environment detected");
-    disableTLSValidationiOS();
-    setTimeout(disableTLSValidationiOS, 1000);
 }
+disableTLSValidation();
+setTimeout(disableTLSValidation, 2000, true);
 
 function hookSystemLoadLibrary() {
     const System = Java.use('java.lang.System');
@@ -33,7 +57,7 @@ function hookSystemLoadLibrary() {
             const loaded = Runtime.getRuntime().loadLibrary0(VMStack.getCallingClassLoader(), library);
             if (library === 'flutter') {
                 console.log("[+] libflutter.so loaded");
-                disableTLSValidationAndroid();
+                disableTLSValidation();
             }
             return loaded;
         } catch (ex) {
@@ -42,51 +66,40 @@ function hookSystemLoadLibrary() {
     };
 }
 
-function disableTLSValidationiOS() {
+function disableTLSValidation(fallback=false) {
     if (TLSValidationDisabled) return;
 
-    var m = Process.findModuleByName("Flutter");
+    var platformConfig = config[Java.available ? "android" : "ios"];
+    var m = Process.findModuleByName(platformConfig["modulename"]);
 
     // If there is no loaded Flutter module, the setTimeout may trigger a second time, but after that we give up
     if (m === null) {
-        if (secondRun) console.log("[!] Flutter module not found.");
-        secondRun = true;
+        if (fallback) console.log("[!] Flutter module not found.");
         return;
     }
 
-    var patterns = {
-        "arm64": [
-            "FF 83 01 D1 FA 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 FD 7B 05 A9 FD 43 01 91 F? 03 00 AA 1? 00 40 F9 ?8 1A 40 F9 15 ?5 4? F9 B5 00 00 B4 "
-        ],
-    };
-    findAndPatch(m, patterns[Process.arch], 0);
-
-}
-
-function disableTLSValidationAndroid() {
-    if (TLSValidationDisabled) return;
-
-    var m = Process.findModuleByName("libflutter.so");
-
-    // The System.loadLibrary doesn't always trigger, or sometimes the library isn't fully loaded yet, so this is a backup
-    if (m === null) {
-        if (secondRun) console.log("[!] Flutter module not found.");
-        secondRun = true;
-        return;
+    if (Process.arch in platformConfig["patterns"])
+    {
+        findAndPatch(m, platformConfig["patterns"][Process.arch], Java.available && Process.arch == "arm" ? 1 : 0, fallback);
+    }
+    else
+    {
+        console.log("[!] Processor architecture not supported: ", Process.arch);
     }
 
-    var patterns = {
-        "arm64": [
-            "F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9",
-        ],
-        "arm": [
-            "2D E9 FE 43 D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ?? 71"
-        ]
-    };
-    findAndPatch(m, patterns[Process.arch], Process.arch == "arm" ? 1 : 0);
+    if (!TLSValidationDisabled) 
+    {
+        if (fallback){   
+            console.log('[!] ssl_verify_peer_cert not found. Please open an issue at https://github.com/NVISOsecurity/disable-flutter-tls-verification/issues');
+        }
+        else
+        {
+            console.log('[!] ssl_verify_peer_cert not found. Trying again...');
+        }
+    }
 }
 
-function findAndPatch(m, patterns, thumb) {
+function findAndPatch(m, patterns, thumb, fallback) {
     console.log("[+] Flutter library found");
     var ranges = m.enumerateRanges('r-x');
     ranges.forEach(range => {
@@ -99,15 +112,7 @@ function findAndPatch(m, patterns, thumb) {
                 }
             });
         });
-    });
-
-    if (!TLSValidationDisabled) {
-        if (secondRun)
-            console.log('[!] ssl_verify_peer_cert not found. Please open an issue at https://github.com/NVISOsecurity/disable-flutter-tls-verification/issues');
-        else
-            console.log('[!] ssl_verify_peer_cert not found. Trying again...');
-    }
-    secondRun = true;
+    });    
 }
 
 function hook_ssl_verify_peer_cert(address) {
