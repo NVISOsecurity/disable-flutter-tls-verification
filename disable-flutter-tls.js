@@ -14,7 +14,7 @@ var config = {
         "modulename": "Flutter",
         "patterns":{
             "arm64": [
-                "FF 83 01 D1 FA 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 FD 7B 05 A9 FD 43 01 91 F? 03 00 AA 1? 00 40 F9 ?8 1A 40 F9 15 ?5 4? F9 B5 00 00 B4 "
+                "FF 83 01 D1 FA 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 FD 7B 05 A9 FD 43 01 91 F? 03 00 AA ?? 0? 40 F9 ?8 1? 40 F9 15 ?? 4? F9 B5 00 00 B4",
             ],
         },
     },
@@ -23,10 +23,11 @@ var config = {
         "patterns":{
             "arm64": [
                 "F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9",
-                "F? 43 01 D1 FE 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 13 00 40 F9 F4 03 00 AA 68 1A 40 F9"
+                "F? 43 01 D1 FE 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 13 00 40 F9 F4 03 00 AA 68 1A 40 F9",
+                "FF 43 01 D1 FE 67 01 A9 5A 1A 06 94 D9 7B 06 94 68 1A 40 F9 15 15 41 F9 B5 00 00 B4 B6 4A 40 F9"
             ],
             "arm": [
-                "2D E9 FE 43 D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ?? 71"
+                "2D E9 F? 4? D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ??",
             ],
             "x64": [
                 "55 41 57 41 56 41 55 41 54 53 50 49 89 f? 4c 8b 37 49 8b 46 30 4c 8b a? ?? 0? 00 00 4d 85 e? 74 1? 4d 8b",
@@ -87,10 +88,17 @@ function disableTLSValidation(fallback=false) {
         console.log("[!] Processor architecture not supported: ", Process.arch);
     }
 
-    if (!TLSValidationDisabled) 
+    if (!TLSValidationDisabled)
     {
-        if (fallback){   
-            console.log('[!] ssl_verify_peer_cert not found. Please open an issue at https://github.com/NVISOsecurity/disable-flutter-tls-verification/issues');
+        if (fallback){
+            if(m.enumerateRanges('r-x').length == 0)
+            {
+                console.log('[!] No memory ranges found in Flutter library. This is either a Frida bug, or the application is using some kind of RASP.');
+            }
+            else
+            {
+                console.log('[!] ssl_verify_peer_cert not found. Please open an issue at https://github.com/NVISOsecurity/disable-flutter-tls-verification/issues');
+            }
         }
         else
         {
@@ -112,7 +120,7 @@ function findAndPatch(m, patterns, thumb, fallback) {
                 }
             });
         });
-    });    
+    });
 }
 
 function hook_ssl_verify_peer_cert(address) {
