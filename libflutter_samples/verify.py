@@ -13,7 +13,7 @@ config = {
             "arm64": [
                 "F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9",
                 "F? 43 01 D1 FE 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 13 00 40 F9 F4 03 00 AA 68 1A 40 F9",
-                "FF 43 01 D1 FE 67 01 A9 5A 1A 06 94 D9 7B 06 94 68 1A 40 F9 15 15 41 F9 B5 00 00 B4 B6 4A 40 F9"
+                "FF 43 01 D1 FE 67 01 A9 ?? ?? 06 94 ?? 7? 06 94 68 1A 40 F9 15 15 41 F9 B5 00 00 B4 B6 4A 40 F9",
             ],
             "arm": [
                 "2D E9 F? 4? D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ??",
@@ -40,7 +40,7 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 
-for file in list(glob.glob('libflutter_samples/*/*/*')):                                       
+for file in list(glob.glob('./*/*/*')):                                       
     reader = open(file, mode='rb').read()
     hexstring = binascii.hexlify(reader)
 
