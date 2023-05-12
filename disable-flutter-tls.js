@@ -93,7 +93,7 @@ function disableTLSValidation(fallback=false) {
         if (fallback){
             if(m.enumerateRanges('r-x').length == 0)
             {
-                console.log('[!] No memory ranges found in Flutter library. This is either a Frida bug, or the application is using some kind of RASP.');
+                console.log('[!] No memory ranges found in Flutter library. This is either a Frida bug, or the application is using some kind of RASP. Try using Frida as a Gadget or using an older Android version (https://github.com/frida/frida/issues/2266)');
             }
             else
             {

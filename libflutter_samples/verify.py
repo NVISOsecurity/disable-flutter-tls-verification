@@ -63,7 +63,8 @@ for file in list(glob.glob('./*/*/*')):
             break
 
     if len(result) == 1:
-        print(f"{file} > {bcolors.OKGREEN} OK {bcolors.ENDC}")
+        location = hex(hexstring.index(result[0]))
+        print(f"{file} > {bcolors.OKGREEN} OK {bcolors.ENDC} [{location}] [{result[0].decode()}]")
     elif len(result) > 1:
             print(f"{file} > {bcolors.FAIL} {len(result)} results {bcolors.ENDC}")  
     else:
