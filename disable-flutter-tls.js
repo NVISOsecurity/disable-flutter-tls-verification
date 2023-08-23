@@ -9,6 +9,8 @@ If the script doesn't work, take a look at https://github.com/NVISOsecurity/disa
 
 */
 
+// Configuration object containing patterns to locate the ssl_verify_peer_cert function
+// for different platforms and architectures.
 var config = {
     "ios":{
         "modulename": "Flutter",
@@ -38,16 +40,23 @@ var config = {
     }
 };
 
+// Flag to check if TLS validation has already been disabled
 var TLSValidationDisabled = false;
+
+// Check if Java environment is available (Android)
 if (Java.available) {
     console.log("[+] Java environment detected");
     Java.perform(hookSystemLoadLibrary);
+// Check if ObjC environment is available (iOS)
 } else if (ObjC.available) {
     console.log("[+] iOS environment detected");
 }
+
+// Attempt to disable TLS validation immediately and then again after a 2 second delay
 disableTLSValidation();
 setTimeout(disableTLSValidation, 2000, true);
 
+// Hook the system load library method to detect when libflutter.so is loaded on Android
 function hookSystemLoadLibrary() {
     const System = Java.use('java.lang.System');
     const Runtime = Java.use('java.lang.Runtime');
@@ -68,6 +77,7 @@ function hookSystemLoadLibrary() {
     };
 }
 
+// Main function to disable TLS validation for Flutter
 function disableTLSValidation(fallback=false) {
     if (TLSValidationDisabled) return;
 
@@ -108,6 +118,7 @@ function disableTLSValidation(fallback=false) {
     }
 }
 
+// Find and patch the method in memory to disable TLS validation
 function findAndPatch(m, patterns, thumb, fallback) {
     console.log("[+] Flutter library found");
     var ranges = m.enumerateRanges('r-x');
@@ -124,6 +135,7 @@ function findAndPatch(m, patterns, thumb, fallback) {
     });
 }
 
+// Replace the target function's implementation to effectively disable the TLS check
 function hook_ssl_verify_peer_cert(address) {
     Interceptor.replace(address, new NativeCallback((pathPtr, flags) => {
         return 0;
