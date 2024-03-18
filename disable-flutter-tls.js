@@ -42,37 +42,57 @@ var config = {
 
 // Flag to check if TLS validation has already been disabled
 var TLSValidationDisabled = false;
-
+var flutterLibraryFound = false;
 var tries = 0;
 var maxTries = 5;
+var timeout = 1000;
 disableTLSValidation();
 
 
 // Main function to disable TLS validation for Flutter
 function disableTLSValidation() {
+
+    // Stop if ready
     if (TLSValidationDisabled) return;
+
     tries ++;
+    if(tries > maxTries){
+        console.log('[!] Max attempts reached, stopping');
+        return;
+    }
+    
     console.log(`[+] Attempting to find and hook ssl_verify_peer_cert (${tries}/${maxTries})`)
 
+    // Get reference to module. Necessary for iOS, and usefull check for Android
     var platformConfig = config[Java.available ? "android" : "ios"];
     var m = Process.findModuleByName(platformConfig["modulename"]);
-    // Verify if the flutter library has been loaded
+
     if (m === null) {
-        if(tries < maxTries){
-            setTimeout(disableTLSValidation, 1000);
-        }else{
-            console.log('[!] Flutter library not found. Max attempts reached, stopping');
-        }
+        console.log('[!] Flutter library not found');
+        setTimeout(disableTLSValidation, timeout);
         return;
     }
     else{
         // reset counter so that searching for ssl_verify_peer_cert also gets x attempts
-        tries = 0;
+        if(flutterLibraryFound == false){
+            flutterLibraryFound = true;
+            tries = 1;
+        }
     }
 
     if (Process.arch in platformConfig["patterns"])
     {
-        findAndPatch(platformConfig["patterns"][Process.arch], Java.available && Process.arch == "arm" ? 1 : 0);
+        var ranges;
+        if(Java.available){
+            // On Android, getting ranges from the loaded module is buggy, so we revert to Process.enumerateRanges
+            ranges = Process.enumerateRanges({protection: 'r-x'}).filter(isFlutterRange)
+
+        }else{
+            // On iOS, there's no issue
+            ranges = m.enumerateRanges('r-x')
+        }
+
+        findAndPatch(ranges, platformConfig["patterns"][Process.arch], Java.available && Process.arch == "arm" ? 1 : 0);
     }
     else
     {
@@ -82,7 +102,7 @@ function disableTLSValidation() {
     if (!TLSValidationDisabled)
     {        
         if(tries < maxTries){
-            console.log(`[!] Flutter library found, but ssl_verify_peer_cert could not be found. Trying again... (${tries}/${maxTries})`)
+            console.log(`[!] Flutter library found, but ssl_verify_peer_cert could not be found.`)
         }
         else
         {
@@ -92,43 +112,39 @@ function disableTLSValidation() {
 }
 
 // Find and patch the method in memory to disable TLS validation
-function findAndPatch(patterns, thumb) {
-    // Even though we have identified the Flutter module previously, getting the ranges from a module object is buggy
-    // So alternatively, we get all ranges via Process.enumerateRanges and then use DebugSymbol.fromAddress to figure out if the range belongs to flutter
-    var ranges = Process.enumerateRanges({protection: 'r-x'})
-    var scannedRanges = 0;
+function findAndPatch(ranges, patterns, thumb) {
+   
     ranges.forEach(range => {
-        if(isFlutterRange(range.base)){
-            scannedRanges ++;
-            patterns.forEach(pattern => {
-                var matches = Memory.scanSync(range.base, range.size, pattern);
-                matches.forEach(match => {
-                    var info = DebugSymbol.fromAddress(match.address)
-                    console.log(`[+] ssl_verify_peer_cert found at offset: ${info.name}`);
-                    TLSValidationDisabled = true;
-                    hook_ssl_verify_peer_cert(match.address.add(thumb));
-                    console.log('[+] ssl_verify_peer_cert has been patched')
-       
-                });
-                if(matches.length > 1){
-                    console.log('[!] Multiple matches detected. This can have a negative impact and may crash the app. Please open a ticket')
-                }
+        patterns.forEach(pattern => {
+            var matches = Memory.scanSync(range.base, range.size, pattern);
+            matches.forEach(match => {
+                var info = DebugSymbol.fromAddress(match.address)
+                console.log(`[+] ssl_verify_peer_cert found at offset: ${info.name}`);
+                TLSValidationDisabled = true;
+                hook_ssl_verify_peer_cert(match.address.add(thumb));
+                console.log('[+] ssl_verify_peer_cert has been patched')
+    
             });
-        }
+            if(matches.length > 1){
+                console.log('[!] Multiple matches detected. This can have a negative impact and may crash the app. Please open a ticket')
+            }
+        });
         
     });
     
     // Try again. disableTLSValidation will not do anything if TLSValidationDisabled = true
-    disableTLSValidation();
+    setTimeout(disableTLSValidation, timeout);
 }
 
-function isFlutterRange(address){
+function isFlutterRange(range){
+    var address = range.base
     var info = DebugSymbol.fromAddress(address)
     if(info.moduleName != null){
         if(info.moduleName.toLowerCase().includes("flutter")){
             return true;
         }
     }
+    return false;
 }
 
 // Replace the target function's implementation to effectively disable the TLS check
