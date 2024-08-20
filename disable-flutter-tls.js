@@ -42,6 +42,7 @@ var config = {
     }
 };
 
+console.log("[+] Arch:", Process.arch)
 // Flag to check if TLS validation has already been disabled
 var TLSValidationDisabled = false;
 var flutterLibraryFound = false;
