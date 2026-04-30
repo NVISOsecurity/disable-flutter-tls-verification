@@ -27,6 +27,7 @@ var config = {
         "modulename": "libflutter.so",
         "patterns":{
             "arm64": [
+                ["F8 5F 44 A9 FE 67 43 A9 ?? ?? ?? 14 FE 0F 1C F8", 12],
                 "F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9",
                 "F? 43 01 D1 FE 67 01 A9 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 13 00 40 F9 F4 03 00 AA 68 1A 40 F9",
                 "FF 43 01 D1 FE 67 01 A9 ?? ?? 06 94 ?? 7? 06 94 68 1A 40 F9 15 15 41 F9 B5 00 00 B4 B6 4A 40 F9",
@@ -191,20 +192,22 @@ function disableTLSValidation() {
 function findAndPatch(ranges, patterns, thumb) {
    
     ranges.forEach(range => {
-        patterns.forEach(pattern => {
+        patterns.forEach(entry => {
+            var pattern = Array.isArray(entry) ? entry[0] : entry;
+            var extra = Array.isArray(entry) ? entry[1] : 0;
             var matches = Memory.scanSync(range.base, range.size, pattern);
             matches.forEach(match => {
-                var info = DebugSymbol.fromAddress(match.address)
+                var target = match.address.add(thumb + extra);
+                var info = DebugSymbol.fromAddress(target)
                 if(info.name){
-                    console.log(`[+] ssl_verify_peer_cert found at offset: ${info.name || match.address}`);
+                    console.log(`[+] ssl_verify_peer_cert found at offset: ${info.name || target}`);
                 }else{
-
-                    console.log(`[+] ssl_verify_peer_cert found at location: ${match.address}`);
+                    console.log(`[+] ssl_verify_peer_cert found at location: ${target}`);
                 }
                 TLSValidationDisabled = true;
-                hook_ssl_verify_peer_cert(match.address.add(thumb));
+                hook_ssl_verify_peer_cert(target);
                 console.log('[+] ssl_verify_peer_cert has been patched')
-    
+
             });
             if(matches.length > 1){
                 console.log('[!] Multiple matches detected. This can have a negative impact and may crash the app. Please open a ticket')
